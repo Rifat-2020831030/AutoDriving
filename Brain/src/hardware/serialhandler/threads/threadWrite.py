@@ -46,6 +46,11 @@ from src.utils.messages.allMessages import (
 from src.utils.messages.messageHandlerSubscriber import messageHandlerSubscriber
 from src.utils.messages.messageHandlerSender import messageHandlerSender
 
+# import controlling unit
+control_unit_path = "D:\Programming\Autodrive\March Version\AutoDriving"
+import sys
+sys.path.append(control_unit_path)
+from main import velocity_steer
 
 class threadWrite(ThreadWithStop):
     """This thread write the data that Raspberry PI send to NUCLEO.\n
@@ -245,13 +250,16 @@ class threadWrite(ThreadWithStop):
             self.signalRunningSender.send({"Type": "Run", "value": True})
             self.speedMotorSender.send({"Type": "Speed", "value": self.s})
             self.steerMotorSender.send({"Type": "Steer", "value": self.i})
-            self.i += self.j
-            if self.i >= 21.0:
-                self.i = 21.0
-                self.s = self.i / 7
-                self.j *= -1
-            if self.i <= -21.0:
-                self.i = -21.0
-                self.s = self.i / 7
-                self.j *= -1.0
+            # self.i += self.j
+            # if self.i >= 21.0:
+            #     self.i = 21.0
+            #     self.s = self.i / 7
+            #     self.j *= -1
+            # if self.i <= -21.0:
+            #     self.i = -21.0
+            #     self.s = self.i / 7
+            #     self.j *= -1.0
+            velocity, steer = velocity_steer()
+            self.i = steer
+            self.s = velocity
             threading.Timer(0.01, self.example).start()
