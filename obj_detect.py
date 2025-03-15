@@ -6,6 +6,24 @@ from ultralytics import YOLO
 # Load the trained model
 model = YOLO("./model/best.pt")  
 
+# Constants for distance estimation
+KNOWN_HEIGHT = 0.06  # 60 mm in meters
+FOCAL_LENGTH = 700   # Approximate focal length of webcam in pixels
+
+def calculate_distance(perceived_height):
+    """
+    Calculate the distance of the object using the focal length formula.
+    
+    Args:
+        perceived_height (int): The height of the detected object in pixels.
+        
+    Returns:
+        distance (float): Estimated distance in meters.
+    """
+    if perceived_height <= 0:
+        return None  # Avoid division errors
+    return (KNOWN_HEIGHT * FOCAL_LENGTH) / perceived_height
+
 def detect_objects(image):
     """
     Detects traffic signs in the input image.
@@ -26,7 +44,11 @@ def detect_objects(image):
             class_id = int(box.cls[0])
             class_name = model.names[class_id]  # Get class name
             confidence = float(box.conf[0])
-            detections.append((class_name, (x_min, y_min, x_max, y_max), confidence))
+            class_name = f"{class_name} [{confidence:.2f}]"
+            height_pixels = y_max - y_min  # Height of the detected object in pixels
+            distance = calculate_distance(height_pixels)  # Compute distance
+
+            detections.append((class_name, (x_min, y_min, x_max, y_max), distance))
 
     return detections
 
@@ -66,12 +88,15 @@ def process_webcam(resize_factor=0.5):
                 # if len(detection) != 2:
                 #     continue  # Skip invalid detections
 
-                class_name, (x_min, y_min, x_max, y_max), confidence = detection
+                class_name, (x_min, y_min, x_max, y_max), distance  = detection
                 cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2) # Draw bounding box
                 cv2.putText(frame, class_name, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                            0.6, (0, 255, 0), 2) # Display class name
-                cv2.putText(frame, f"{confidence:.2f}", (x_min, y_min - 30), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6, (0, 255, 0), 2) # Display confidence
+                            0.6, (0, 255, 0), 1) # Display class name
+                
+                # Display distance in meters
+                if distance:
+                    cv2.putText(frame, f"Dist: {distance:.2f}m", (x_min, y_max + 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 1)
                 
 
         # Display FPS
