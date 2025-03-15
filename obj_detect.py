@@ -17,7 +17,7 @@ def detect_objects(image):
         results: YOLO model output
         detections: List of with detected obj as tuples (class_name, (x_min, y_min, x_max, y_max))
     """
-    results = model(image, conf=0.7)  # Run inference
+    results = model(image, conf=0.5)  # Run inference
     detections = []
 
     for result in results:
@@ -25,9 +25,10 @@ def detect_objects(image):
             x_min, y_min, x_max, y_max = map(int, box.xyxy[0])
             class_id = int(box.cls[0])
             class_name = model.names[class_id]  # Get class name
-            detections.append((class_name, (x_min, y_min, x_max, y_max)))
+            confidence = float(box.conf[0])
+            detections.append((class_name, (x_min, y_min, x_max, y_max), confidence))
 
-    return results, detections
+    return detections
 
 
 def process_webcam(resize_factor=0.5):
@@ -62,13 +63,16 @@ def process_webcam(resize_factor=0.5):
         # Draw bounding boxes only if detections exist
         if detections:
             for detection in detections:
-                if len(detection) != 2:
-                    continue  # Skip invalid detections
+                # if len(detection) != 2:
+                #     continue  # Skip invalid detections
 
-                class_name, (x_min, y_min, x_max, y_max) = detection
+                class_name, (x_min, y_min, x_max, y_max), confidence = detection
                 cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2) # Draw bounding box
                 cv2.putText(frame, class_name, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 
                             0.6, (0, 255, 0), 2) # Display class name
+                cv2.putText(frame, f"{confidence:.2f}", (x_min, y_min - 30), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6, (0, 255, 0), 2) # Display confidence
+                
 
         # Display FPS
         fps = 1 / (end_time - start_time) if (end_time - start_time) > 0 else 0
