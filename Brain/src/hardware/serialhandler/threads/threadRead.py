@@ -25,14 +25,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
-import logging
+
 import time
 import threading
 import re
 import os
-
-from datetime import datetime
-
 
 from src.templates.threadwithstop import ThreadWithStop
 from src.utils.messages.allMessages import (
@@ -94,92 +91,94 @@ class threadRead(ThreadWithStop):
 
     # ====================================== RUN ==========================================
     def run(self):
-        buffer = ""  
         while self._running:
-            if self.serialCon.in_waiting > 0:
-                try:
-                    data = self.serialCon.read(self.serialCon.in_waiting).decode("ascii")
-                    buffer += data  
-                    while ";;" in buffer:
-                        msg, buffer = buffer.split(";;", 1) 
-                        
-                        if msg.strip():
-                            try:
-                                self.sendqueue(msg.strip()) 
-                            except Exception as e:
-                                print(f"Error processing message: {msg.strip()} ({e})")
-                            
-                except Exception as e:
-                    print(f"ThreadRead -> run method: {e}")
+            read_chr = self.serialCon.read()
+            try:
+                read_chr = read_chr.decode("ascii")
+                if read_chr == "@":
+                    self.isResponse = True
+                    self.buff = ""
+                elif read_chr == "\r":
+                    self.isResponse = False
+                    if len(self.buff) != 0:
+                        self.sendqueue(self.buff)
+                if self.isResponse:
+                    self.buff += read_chr
+            except Exception as e :
+                print(e)
 
     # ==================================== SENDING =======================================
     def Queue_Sending(self):
         """Callback function for enable button flag."""
+
         self.enableButtonSender.send(True)
         threading.Timer(1, self.Queue_Sending).start()
 
     def sendqueue(self, buff):
         """This function select which type of message we receive from NUCLEO and send the data further."""
 
-        if '@' in buff and ':' in buff:
-            action, value = buff.split(":") 
-            action = action[1:]
-            if self.debugger:
-                self.logger.info(buff)
+        action, value = buff.split(":") # @action:value;;
+        action = action[1:]
+        value = value[:-2]
+        if self.debugger:
+            self.logger.info(buff)
 
-            if action == "imu":
-                splittedValue = value.split(";")
-                if(len(buff)>20):
-                    data = {
-                        "roll": splittedValue[0],
-                        "pitch": splittedValue[1],
-                        "yaw": splittedValue[2],
-                        "accelx": splittedValue[3],
-                        "accely": splittedValue[4],
-                        "accelz": splittedValue[5],
-                    }
-                    self.imuDataSender.send(str(data))
-                else:
-                    self.imuAckSender.send(splittedValue[0])
+        if action == "speed":
+            speed = value.split(",")[0]
+            if self.isFloat(speed):
+                self.currentSpeedSender.send(float(speed))
 
-            elif action == "speed":
-                speed = value.split(",")[0]
-                if (lambda v: (lambda: float(v), True)[1] if isinstance(v, str) else False)(speed):
-                    self.currentSpeedSender.send(float(speed))
+        elif action == "steer":
+            steer = value.split(",")[0]
+            if self.isFloat(steer):
+                self.currentSteerSender.send(float(steer))
 
-            elif action == "steer":
-                steer = value.split(",")[0]
-                if (lambda v: (lambda: float(v), True)[1] if isinstance(v, str) else False)(steer):
-                    self.currentSteerSender.send(float(steer))
+        elif action == "battery":
+            if self.checkValidValue(action, value):
+                percentage = (int(value)-7200)/12
+                percentage = max(0, min(100, round(percentage)))
 
-            elif action == "instant":
-                if self.checkValidValue(action, value):
-                    self.instantConsumptionSender.send(float(value)/1000.0)
+                self.batteryLvlSender.send(percentage)
 
-            elif action == "battery":
-                if self.checkValidValue(action, value):
-                    percentage = (int(value)-7200)/12
-                    percentage = max(0, min(100, round(percentage)))
+        elif action == "instant":
+            if self.checkValidValue(action, value):
+                self.instantConsumptionSender.send(float(value))
 
-                    self.batteryLvlSender.send(percentage)
-
-            elif action == "resourceMonitor":
-                if self.checkValidValue(action, value):
-                    data = re.match(self.resourceMonitorPattern, value)
-                    if data:
-                        message = {"heap": data.group(1), "stack": data.group(2)}
-                        self.resourceMonitorSender.send(message)
-
-            elif action == "warning":
-                data = re.match(self.warningPattern, value)
+        elif action == "resourceMonitor":
+            if self.checkValidValue(action, value):
+                data = re.match(self.resourceMonitorPattern, value)
                 if data:
-                    print(f"WARNING! Shutting down in {data.group(1)} hours {data.group(2)} minutes {data.group(3)} seconds")
-                    self.warningSender.send(action,data)
-                    
-            elif action == "shutdown":
-                print("SHUTTING DOWN!")
-                time.sleep(3)
-                os.system("sudo shutdown -h now")
+                    message = {"heap": data.group(1), "stack": data.group(2)}
+                    self.resourceMonitorSender.send(message)
+
+        elif action == "imu":
+            splittedValue = value.split(";")
+            if(len(buff)>20):
+                data = {
+                    "roll": splittedValue[0],
+                    "pitch": splittedValue[1],
+                    "yaw": splittedValue[2],
+                    "accelx": splittedValue[3],
+                    "accely": splittedValue[4],
+                    "accelz": splittedValue[5],
+                }
+                self.imuDataSender.send(str(data))
+            else:
+                self.imuAckSender.send(splittedValue[0])
+                
+        elif action == "kl":
+            self.checkValidValue(action, value)
+
+        elif action == "warning":
+            data = re.match(self.warningPattern, value)
+            if data:
+                print(f"WARNING! Shutting down in {data.group(1)} hours {data.group(2)} minutes {data.group(3)} seconds")
+                self.warningSender.send(action,data)
+                
+        elif action == "shutdown":
+            print("SHUTTING DOWN!")
+            time.sleep(3)
+            os.system("sudo shutdown -h now")
             
     def checkValidValue(self, action, message):
         if message == "syntax error":

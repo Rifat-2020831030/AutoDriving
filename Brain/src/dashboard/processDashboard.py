@@ -106,7 +106,7 @@ class processDashboard(WorkerProcess):
         self.socketio.run(self.app, host='0.0.0.0', port=5005)
 
     def subscribe(self):
-        """Subscribe function. In this function we make all the required subscribe to process gateway"""
+    """Subscribe function. In this function we make all the required subscribe to process gateway"""
         for name, enum in self.messagesAndVals.items():
             if enum["owner"] != "Dashboard":
                 subscriber = messageHandlerSubscriber(self.queueList, enum["enum"], "lastOnly", True)
@@ -192,7 +192,7 @@ class processDashboard(WorkerProcess):
     def sendContinuousHardwareData(self):
         """Monitor and update hardware metrics periodically."""
         self.memoryUsage = psutil.virtual_memory().percent
-        self.cpuCoreUsage = psutil.cpu_percent(interval=0.05, percpu=True)
+        self.cpuCoreUsage = psutil.cpu_percent(interval=1, percpu=True)
         self.cpuTemperature = round(psutil.sensors_temperatures()['cpu_thermal'][0].current)
         eventlet.spawn_after(1, self.sendContinuousHardwareData)
 
@@ -201,7 +201,7 @@ class processDashboard(WorkerProcess):
         counter = 0
         socketSleep = 0.1
         sendTime = 1
-
+        
         while self.running:
             for msg, subscriber in self.messages.items():
                 resp = subscriber["obj"].receive()

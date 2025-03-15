@@ -42,7 +42,6 @@
 # ===================================== GENERAL IMPORTS ==================================
 import sys
 import subprocess
-import time
 
 sys.path.append(".")
 from multiprocessing import Queue, Event
@@ -71,11 +70,11 @@ queueList = {
     "General": Queue(),
     "Config": Queue(),
 }
+
 logging = logging.getLogger()
 
-
 Dashboard = True
-Camera = True
+Camera = False
 Semaphores = False
 TrafficCommunication = False
 SerialHandler = True
@@ -118,7 +117,7 @@ if TrafficCommunication:
 
 # Initializing serial connection NUCLEO - > PI
 if SerialHandler:
-    processSerialHandler = processSerialHandler(queueList, logging, debugging = False)
+    processSerialHandler = processSerialHandler(queueList, logging, debugging = True, example= True)
     allProcesses.append(processSerialHandler)
 
 # ------ New component runs starts here ------#
@@ -130,50 +129,14 @@ for process in allProcesses:
     process.daemon = True
     process.start()
 
-time.sleep(10)
-c4_bomb = r"""
-  _______________________
- /                       \
-| [██████]    [██████]    |
-| [██████]    [██████]    |
-| [██████]    [██████]    |
-|       TIMER: 00:10      |
-|_________________________|
- \_______________________/
-        LET'S GO!!!
-
-        Press ctrl+C to close
-"""
-
-print(c4_bomb)
-
 # ===================================== STAYING ALIVE ====================================
 blocker = Event()
 try:
     blocker.wait()
 except KeyboardInterrupt:
     print("\nCatching a KeyboardInterruption exception! Shutdown all processes.\n")
-    big_text = """
-    PPPP   L        EEEEE    A    SSSS  EEEEE       W      W   A   III TTTTT
-    P   P  L        E       A A   S     E           W      W  A A   I    T  
-    PPPP   L        EEEE   A   A   SSS  EEEE        W  W   W A   A  I    T  
-    P      L        E      AAAAA      S E           W W W W  AAAAA  I    T  
-    P      LLLLLL   EEEEE  A   A  SSSS  EEEEE        W   W   A   A III   T  
-    """
-
-    print(big_text)
     for proc in reversed(allProcesses):
         print("Process stopped", proc)
         proc.stop()
-    print("Process stopped", processGateway)
-    processGateway.stop()
 
-    big_text = """
-    PPPP   RRRR   EEEEE  SSSS  SSSS       CCCC  TTTTT RRRR    L          ++      CCCC      !!! 
-    P   P  R   R  E     S     S          C        T   R   R   L          ++      C         !!! 
-    PPPP   RRRR   EEEE   SSS   SSS       C        T   RRRR    L      ++++++++++  C         !!! 
-    P      R R    E         S     S      C        T   R R     L          ++      C         !!! 
-    P      R  R   EEEEE  SSSS  SSSS       CCCC    T   R  R    LLLLL      ++      CCCC      !!!
-    """
-
-    print(big_text)
+processGateway.stop()

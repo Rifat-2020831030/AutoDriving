@@ -29,7 +29,6 @@
 import json
 import time
 from src.utils.messages.allMessages import Location
-from src.utils.messages.messageHandlerSender import messageHandlerSender
 from twisted.internet import protocol
 
 # The server itself. Creates a new Protocol for each new connection and has the info for all of them.
@@ -42,7 +41,6 @@ class tcpClient(protocol.ClientFactory):
         self.locsysID = locsysID
         self.locsysFrequency = locsysFrequency
         self.queue = queue
-        self.sendLocation = messageHandlerSender(self.queue, Location)
 
     def clientConnectionLost(self, connector, reason):
         print(
@@ -93,12 +91,20 @@ class SingleConnection(protocol.Protocol):
 
         if da["type"] == "location":
             da["id"] = self.factory.locsysID
-            self.factory.sendLocation.send(da)
+
+            message_to_send = {
+                "Owner": Location.Owner.value,
+                "msgID": Location.msgID.value,
+                "msgType": Location.msgType.value,
+                "msgValue": da,
+            }
+            self.factory.queue.put(message_to_send)
         else:
             print(
                 "got message from trafficcommunication server: ",
                 self.factory.connectiondata,
             )
+
     def send_data(self, message):
         msg = json.dumps(message)
         self.transport.write(msg.encode())

@@ -58,7 +58,7 @@ class threadWrite(ThreadWithStop):
     """
 
     # ===================================== INIT =========================================
-    def __init__(self, queues, serialCom, logFile, logger, debugger = False, example=False):
+    def __init__(self, queues, serialCom, logFile, logger, debugger = True, example=False):
         super(threadWrite, self).__init__()
         self.queuesList = queues
         self.serialCom = serialCom
@@ -113,8 +113,6 @@ class threadWrite(ThreadWithStop):
             command = {"action": "batteryCapacity", "capacity": data["batteryCapacity"]["capacity"]}
             self.sendToSerial(command)
             time.sleep(0.05)
-
-            
         else:
             for e in range(4):
                 if data[e]["value"] == "False":
@@ -244,6 +242,7 @@ class threadWrite(ThreadWithStop):
         """This function simulte the movement of the car."""
 
         if self.exampleFlag:
+            self.signalRunningSender.send({"Type": "Run", "value": True})
             self.speedMotorSender.send({"Type": "Speed", "value": self.s})
             self.steerMotorSender.send({"Type": "Steer", "value": self.i})
             self.i += self.j
