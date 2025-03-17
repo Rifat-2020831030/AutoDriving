@@ -188,9 +188,9 @@ def show_seg_result(img, result, palette=None,is_demo=False):
     if palette is None:
         palette = np.random.randint(
                 0, 255, size=(3, 3))
-    palette[0] = [0, 0, 0]
-    palette[1] = [0, 255, 0]
-    palette[2] = [255, 0, 0]
+    palette[0] = [0, 0, 0] 
+    palette[1] = [255, 0, 0] 
+    palette[2] = [0, 255, 0] 
     palette = np.array(palette)
     assert palette.shape[0] == 3 # len(classes)
     assert palette.shape[1] == 3
@@ -203,8 +203,8 @@ def show_seg_result(img, result, palette=None,is_demo=False):
     else:
         color_area = np.zeros((result[0].shape[0], result[0].shape[1], 3), dtype=np.uint8)
         
-        color_area[result[0] == 1] = [0, 255, 0]
-        color_area[result[1] ==1] = [255, 0, 0]
+        color_area[result[0] == 1] = [50, 0, 255] 
+        color_area[result[1] ==1] = [0, 255, 0]
         color_seg = color_area
 
     # convert to BGR
@@ -216,30 +216,6 @@ def show_seg_result(img, result, palette=None,is_demo=False):
     #img = img.astype(np.uint8)
     #img = cv2.resize(img, (1280,720), interpolation=cv2.INTER_LINEAR)
     return 
-
-# def show_seg_result(img, result, steering_angle, is_demo=False):
-#     da_seg_mask, ll_seg_mask = result
-
-#     # Overlay lane lines
-#     lane_overlay = np.zeros_like(img, dtype=np.uint8)
-#     lane_overlay[ll_seg_mask == 1] = [0, 0, 255]  # Red for lane lines
-#     img = cv2.addWeighted(img, 0.7, lane_overlay, 0.3, 0)
-
-#     # Draw steering direction arrow
-#     h, w, _ = img.shape
-#     car_center = (w // 2, h - 50)  # Bottom-center of the car
-#     arrow_length = 100  # Arrow size
-
-#     # Calculate endpoint based on steering angle
-#     angle_rad = np.radians(steering_angle)
-#     end_x = int(car_center[0] + arrow_length * np.sin(angle_rad))
-#     end_y = int(car_center[1] - arrow_length * np.cos(angle_rad))
-
-#     cv2.arrowedLine(img, car_center, (end_x, end_y), (0, 255, 0), 5, tipLength=0.4)
-#     cv2.putText(img, f"Steering: {steering_angle:.1f}", (50, 50),
-#                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-#     return img
 
 
 def increment_path(path, exist_ok=True, sep=''):
@@ -313,7 +289,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
     # Settings
     min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
-    max_det = 300  # maximum number of detections per image
+    max_det = 100  # maximum number of detections per image
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 10.0  # seconds to quit after
     redundant = True  # require redundant detections
@@ -415,7 +391,7 @@ def box_iou(box1, box2):
     return inter / (area1[:, None] + area2 - inter)  # iou = inter / (area1 + area2 - inter)
 
 class LoadImages:  # for inference
-    def __init__(self, path, img_size=640, stride=32):
+    def __init__(self, path, img_size=640, stride=32, desired_fps=20):
         p = str(Path(path).absolute())  # os-agnostic absolute path
         if '*' in p:
             files = sorted(glob.glob(p, recursive=True))  # glob
@@ -438,6 +414,9 @@ class LoadImages:  # for inference
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
+        self.frame_interval = 1  # No skipping by default
+        self.desired_fps = desired_fps  # New attribute
+
         if any(videos):
             self.new_video(videos[0])  # new video
         else:
@@ -455,9 +434,11 @@ class LoadImages:  # for inference
         path = self.files[self.count]
 
         if self.video_flag[self.count]:
-            # Read video
             self.mode = 'video'
             ret_val, img0 = self.cap.read()
+            while ret_val and (self.frame % self.frame_interval != 0):
+                ret_val, img0 = self.cap.read()
+                self.frame += 1
             if not ret_val:
                 self.count += 1
                 self.cap.release()
@@ -467,19 +448,19 @@ class LoadImages:  # for inference
                     path = self.files[self.count]
                     self.new_video(path)
                     ret_val, img0 = self.cap.read()
-
-            self.frame += 1
-            print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ', end='')
+            else:
+                self.frame += 1
+                print(f'Processing video {self.count + 1}/{self.nf} (Frame {self.frame}/{self.nframes}) {path}: ', end='')
 
         else:
             # Read image
             self.count += 1
             img0 = cv2.imread(path)  # BGR
             assert img0 is not None, 'Image Not Found ' + path
-            #print(f'image {self.count}/{self.nf} {path}: ', end='')
+            # print(f'image {self.count}/{self.nf} {path}: ', end='')
 
         # Padded resize
-        img0 = cv2.resize(img0, (1280,720), interpolation=cv2.INTER_LINEAR)
+        img0 = cv2.resize(img0, (1280, 720), interpolation=cv2.INTER_LINEAR)
         img = letterbox(img0, self.img_size, stride=self.stride)[0]
 
         # Convert
@@ -490,8 +471,14 @@ class LoadImages:  # for inference
 
     def new_video(self, path):
         self.frame = 0
-        self.cap = cv2.VideoCapture(path) # what it does is to open the video file and return a VideoCapture object
-        self.nframes = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) # get the total number of frames in the video
+        self.cap = cv2.VideoCapture(path)
+        self.nframes = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))  # total frames
+        self.original_fps = self.cap.get(cv2.CAP_PROP_FPS)
+        if self.original_fps > 0 and self.desired_fps > 0:
+            self.frame_interval = max(int(round(self.original_fps / self.desired_fps)), 1)
+            # print(f'Original FPS: {self.original_fps}, Desired FPS: {self.desired_fps}, Frame Interval: {self.frame_interval}')
+        else:
+            self.frame_interval = 1  # Process all frames if FPS info is unavailable
 
     def __len__(self):
         return self.nf  # number of files
@@ -539,8 +526,8 @@ def driving_area_mask(seg = None):
     # da_seg_mask = da_seg_mask.int().squeeze().cpu().numpy()
 
     # create a dummy da_seg_mask
-    da_seg_mask = np.zeros((720, 1280))
-    da_seg_mask[0:72, :] = 1
+    da_seg_mask = np.zeros((720, 1280), dtype=np.uint8)
+    da_seg_mask[:, :] = 0
     return da_seg_mask
 
 def lane_line_mask(ll = None):
@@ -548,27 +535,4 @@ def lane_line_mask(ll = None):
     ll_seg_mask = torch.nn.functional.interpolate(ll_predict, scale_factor=2, mode='bilinear')
     ll_seg_mask = torch.round(ll_seg_mask).squeeze(1)
     ll_seg_mask = ll_seg_mask.int().squeeze().cpu().numpy()
-    return ll_seg_mask 
-# code started
-# Convert binary lane mask to coordinates
-def get_lane_points(ll_seg_mask):
-    lane_points = np.column_stack(np.where(ll_seg_mask == 1))  # Get (y, x) coordinates
-    return lane_points
-
-def get_lane_center(lane_points):
-    if len(lane_points) == 0:
-        return None  # No lane detected
-
-    avg_x = np.mean(lane_points[:, 1])  # Average X coordinate
-    avg_y = np.max(lane_points[:, 0])  # Bottom-most Y (closest to the car)
-
-    return int(avg_x), int(avg_y)
-
-def draw_lane(img, lane_center):
-    h, w = img.shape[:2]
-    bottom_center = (w // 2, h)
-    if lane_center:
-        cv2.circle(img, lane_center, 5, (0, 255, 0), -1)  # Draw green center point
-        cv2.line(img, bottom_center, lane_center, (255, 0, 0), 2)  # Draw blue line to visualize steer angle
-    return img
-
+    return ll_seg_mask
